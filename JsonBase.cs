@@ -3,6 +3,8 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 
+using static SonicD5.Json.JsonSerializer;
+
 namespace SonicD5.Json;
 
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
@@ -55,8 +57,8 @@ public abstract class JsonPackable<TCallback> where TCallback : Delegate {
 }
 public sealed partial class JsonSerialization : JsonPackable<JsonSerialization.CallbackFunc> {
 
-	public delegate void CallbackFunc(StringBuilder sb, object obj, LinkedElement<Type> linkedType, Config config, int indentCount, Invoker invoker, Type foundType, ref bool hasSkiped);
-    public delegate void Invoker(object? obj, LinkedElement<Type> linkedType, int indentCount);
+	public delegate void CallbackFunc(ref StringBuilder sb, object obj, LinkedType linkedType, Config config, int indentCount, Invoker invoker, Type foundType, ref bool hasSkiped);
+    public delegate void Invoker(object? obj, LinkedType linkedType, int indentCount);
 
     public sealed class Config {
         private readonly string _indent = "";
@@ -81,8 +83,8 @@ public sealed partial class JsonSerialization : JsonPackable<JsonSerialization.C
 
 public sealed partial class JsonDeserialization : JsonPackable<JsonDeserialization.CallbackFunc> {
 
-	public delegate object? CallbackFunc(ref JsonReadBuffer buffer, LinkedElement<Type> linkedType, Config config, Invoker invoker, Type foundType);
-	public delegate object? Invoker(ref JsonReadBuffer buffer, LinkedElement<Type> linkedType);
+	public delegate object? CallbackFunc(ref JsonReadBuffer buffer, LinkedType linkedType, Config config, Invoker invoker, Type foundType);
+	public delegate object? Invoker(ref JsonReadBuffer buffer, LinkedType linkedType);
 
     public sealed class Config {
         private readonly ImmutableList<JsonDeserialization> _customPack = [];
@@ -93,21 +95,21 @@ public sealed partial class JsonDeserialization : JsonPackable<JsonDeserializati
     }
 }
 
-public class LinkedElement<T> : IEnumerable<T> {
-	public T Value { get; init; }
-	public LinkedElement<T>? Previous { get; init; }
-	public LinkedElement<T> Last { get; private set; }
+public class LinkedType : IEnumerable<Type> {
+	public Type Value { get; init; }
+	public LinkedType? Previous { get; init; }
+	public LinkedType Last { get; private set; }
 
 #pragma warning disable CS8618
-    public LinkedElement(T value, LinkedElement<T>? previous) {
+    public LinkedType(Type value, LinkedType? previous) {
 		Value = value;
 		Previous = previous;
 		for (var e = this; e != null; e = e.Previous) e.Last = this;
 	}
 #pragma warning restore CS8618
 
-	public IEnumerator<T> GetEnumerator() {
-		Stack<T> stack = [];
+	public IEnumerator<Type> GetEnumerator() {
+		Stack<Type> stack = [];
 		for (var e = Last; e != null; e = e.Previous) stack.Push(e.Value);
 		return stack.GetEnumerator();
     }
@@ -117,13 +119,13 @@ public class LinkedElement<T> : IEnumerable<T> {
 		if (Previous != null) {
 			if (Previous.Previous != null)
 				sb.Append(".. -> ");
-			sb.Append($"{Previous.Value} -> ");
+			sb.Append($"{StringType(Previous.Value)} -> ");
 		}
-		sb.Append($"{Value}");
+		sb.Append($"{StringType(Value)}");
 		if (Last != this) {
 			if (Last.Previous != this)
 				sb.Append($" -> ..");
-			sb.Append($" -> {Last.Value}");
+			sb.Append($" -> {StringType(Last.Value)}");
 		}
 		return sb.ToString();
 	}

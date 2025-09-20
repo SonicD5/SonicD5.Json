@@ -10,24 +10,27 @@ public static partial class JsonSerializer {
     public static string Serialize(object? obj, JsonSerialization.Config config) {
         if (obj == null) return Null;
         StringBuilder sb = new();
-        Serialize(sb, obj, new(obj.GetType(), null), config, 0);
+        Serialize(ref sb, obj, new(obj.GetType(), null), config, 0);
         return sb.ToString();
     }
 
     public static string Serialize(object? obj) => Serialize(obj, new());
 
-    private static void Serialize(StringBuilder sb, object? obj, LinkedElement<Type> linkedType, JsonSerialization.Config config, int indentCount) {
+    private static void Serialize(ref StringBuilder sb, object? obj, LinkedType linkedType, JsonSerialization.Config config, int indentCount) {
         if (obj == null) {
             sb.Append(Null);
             return;
         }
+        var type = linkedType.Value;
+        var nullableValue = Nullable.GetUnderlyingType(type);
+        if (nullableValue != null) Serialize(ref sb, obj, new(nullableValue, linkedType), config, indentCount);
         try {
             foreach (var s in config.Pack) {
                 Type? foundType = null;
                 if (!s.TypePredicate(linkedType.Value, ref foundType)) continue;
                 StringBuilder sbTemp = new(sb.ToString());
                 bool hasSkiped = false;
-                s.Callback.Invoke(sbTemp, obj, linkedType, config, indentCount, (o, lt, ic) => Serialize(sb, o, lt, config, ic), foundType, ref hasSkiped);
+                s.Callback.Invoke(ref sbTemp, obj, linkedType, config, indentCount, (o, lt, ic) => Serialize(ref sbTemp, o, lt, config, ic), foundType, ref hasSkiped);
                 if (hasSkiped) continue;
                 sb = sbTemp;
                 return;
@@ -79,7 +82,7 @@ public static partial class JsonSerializer {
     public static bool TryDeserialize<T>(string json, out T? result) => TryDeserialize(json, new(), out result);
 
 
-    private static object? Deserialize(ref JsonReadBuffer buffer, LinkedElement<Type> linkedType, JsonDeserialization.Config config) {
+    private static object? Deserialize(ref JsonReadBuffer buffer, LinkedType linkedType, JsonDeserialization.Config config) {
         var type = linkedType.Value;
         var nullableValue = Nullable.GetUnderlyingType(type);
         if (buffer.NextIsNull()) {

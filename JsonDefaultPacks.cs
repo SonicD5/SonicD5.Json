@@ -10,14 +10,14 @@ namespace SonicD5.Json;
 public sealed partial class JsonSerialization {
     private static readonly List<JsonSerialization> DefaultPack = [
        new() {
-            TypePredicate = (t, ref _) => t == typeof(string),
+            TypePredicate = (t, ref _) => t.IsAssignableTo(typeof(string)),
             JsonTypes = JsonTypes.String,
-            Callback = (sb, obj, _, config, _, _, _, ref _) => sb.Append($"\"{obj.ToString().Escape(config.UnicodeEscape)}\""),
+            Callback = (ref sb, obj, _, config, _, _, _, ref _) => sb.Append($"\"{obj.ToString().Escape(config.UnicodeEscape)}\""),
         },
         new() {
             TypePredicate = (t, ref _) => t.IsPrimitive || t == typeof(decimal),
             JsonTypes = JsonTypes.Number | JsonTypes.Boolean,
-            Callback = (sb, obj, _, _, _, _, _, ref _) => sb.Append(obj switch {
+            Callback = (ref sb, obj, _, _, _, _, _, ref _) => sb.Append(obj switch {
                 float f => f.ToString(CultureInfo.InvariantCulture),
                 double d => d.ToString(CultureInfo.InvariantCulture),
                 decimal d => d.ToString(CultureInfo.InvariantCulture),
@@ -28,7 +28,7 @@ public sealed partial class JsonSerialization {
         new() {
             TypePredicate = (t, ref _) => t.IsEnum,
             JsonTypes = JsonTypes.String,
-            Callback = (sb, obj, linkedType, config, _, _, _, ref _) => {
+            Callback = (ref sb, obj, linkedType, config, _, _, _, ref _) => {
                 var t = linkedType.Value;
                 var field = t.GetFields().First(f => f.Name == Enum.GetName(t, obj));
 
@@ -39,7 +39,7 @@ public sealed partial class JsonSerialization {
         new() {
             TypePredicate = (t, ref _) => t.IsArray,
             JsonTypes = JsonTypes.Array,
-            Callback = (sb, obj, lt, config, ic, inv, _, ref _) => SerializeArray(sb, obj, lt, config, ic, inv),
+            Callback = (ref sb, obj, lt, config, ic, inv, _, ref _) => SerializeArray(sb, obj, lt, config, ic, inv),
         },
         new() {
             TypePredicate = (t, ref _) => t.GetInterfaces().Any(i => {
@@ -48,7 +48,7 @@ public sealed partial class JsonSerialization {
                 return genericDef == typeof(ICollection<>) || genericDef == typeof(IReadOnlyCollection<>);
             }),
             JsonTypes = JsonTypes.Array,
-            Callback = (sb, obj, linkedType, config, ic, invoker, _, ref _) => SerializeCollection(sb, (IEnumerable)obj, new(linkedType.Value.GetInterfaces().First(i => {
+            Callback = (ref sb, obj, linkedType, config, ic, invoker, _, ref _) => SerializeCollection(sb, (IEnumerable)obj, new(linkedType.Value.GetInterfaces().First(i => {
                     if (!i.IsGenericType) return false;
                     var genericDef = i.GetGenericTypeDefinition();
                     return genericDef == typeof(ICollection<>) || genericDef == typeof(IReadOnlyCollection<>);
@@ -57,11 +57,11 @@ public sealed partial class JsonSerialization {
         new() {
             TypePredicate = (t, ref _) => t.IsValueType || t.IsClass,
             JsonTypes = JsonTypes.Object,
-            Callback = (sb, obj, lt, config, ic, inv, _, ref _) => SerializeObject(sb, obj, lt, config, ic, inv)
+            Callback = (ref sb, obj, lt, config, ic, inv, _, ref _) => SerializeObject(sb, obj, lt, config, ic, inv)
         },
     ];
 
-    private static void SerializeObject(StringBuilder sb, object obj, LinkedElement<Type> linkedType, Config config, int indentCount, Invoker invoker) {
+    private static void SerializeObject(StringBuilder sb, object obj, LinkedType linkedType, Config config, int indentCount, Invoker invoker) {
         var members = linkedType.Value.GetFieldsAndProperties();
 
         if (members.Length == 0) {
@@ -111,7 +111,7 @@ public sealed partial class JsonSerialization {
         sb.Append('}');
     }
 
-    private static void SerializeArray(StringBuilder sb, object obj, LinkedElement<Type> linkedType, Config config, int indentCount, Invoker invoker) {
+    private static void SerializeArray(StringBuilder sb, object obj, LinkedType linkedType, Config config, int indentCount, Invoker invoker) {
         var array = (Array)obj;
         if (array.Length == 0) {
             sb.Append("[]");
@@ -149,7 +149,7 @@ public sealed partial class JsonSerialization {
         sb.Append(']');
     }
 
-	private static void SerializeCollection(StringBuilder sb, IEnumerable collection, LinkedElement<Type> linkedEType, Config config, int indentCount, Invoker invoker) {
+	private static void SerializeCollection(StringBuilder sb, IEnumerable collection, LinkedType linkedEType, Config config, int indentCount, Invoker invoker) {
         if ((collection is ICollection ic && ic.Count == 0) || !collection.GetEnumerator().MoveNext()) {
             sb.Append("[]");
             return;
@@ -268,7 +268,7 @@ public sealed partial class JsonDeserialization {
         }
     ];
 
-    private static Array DeserializeArray(ref JsonReadBuffer buffer, LinkedElement<Type> linkedType, Invoker invoker) {
+    private static Array DeserializeArray(ref JsonReadBuffer buffer, LinkedType linkedType, Invoker invoker) {
         var next = buffer.Next();
 
         if (next != JsonReadBuffer.NextType.Array) throw new JsonSyntaxException($"The object start must be '['", buffer);
@@ -298,7 +298,7 @@ public sealed partial class JsonDeserialization {
         return array;
     }
 
-    private static object DeserializeCollection(ref JsonReadBuffer buffer, LinkedElement<Type> linkedEtype, bool readOnly, Invoker invoker) {
+    private static object DeserializeCollection(ref JsonReadBuffer buffer, LinkedType linkedEtype, bool readOnly, Invoker invoker) {
         var next = buffer.Next();
 
         if (next != JsonReadBuffer.NextType.Array) throw new JsonSyntaxException($"The object start must be '['", buffer);
@@ -337,7 +337,7 @@ public sealed partial class JsonDeserialization {
         return raw;
     }
 
-    private static object DeserializeObject(ref JsonReadBuffer buffer, LinkedElement<Type> linkedType, Config config, Invoker invoker) {
+    private static object DeserializeObject(ref JsonReadBuffer buffer, LinkedType linkedType, Config config, Invoker invoker) {
         var next = buffer.Next();
         if (next != JsonReadBuffer.NextType.Block) throw new JsonSyntaxException("The object start must be '{'", buffer);
         object obj = Activator.CreateInstance(linkedType.Value)!;
