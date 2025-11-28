@@ -25,11 +25,4 @@
     <None Include="bin\debug\net8.0\nuh.json5" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Obfuscar" Version="2.2.49">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-
 </Project>

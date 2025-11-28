@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Immutable;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using static SonicD5.Json.JsonSerializer;
@@ -20,11 +22,11 @@ public enum ObjectFieldConventions { NoQuote, SingleQuote = '\'', DoubleQuote = 
 
 [Flags]
 public enum JsonTypes {
-    String,
-	Number,
-	Boolean,
-    Array,
-    Object
+	Object = 2,
+	Array = 4,
+	String = 8,
+	Number = 16,
+	Boolean = 32,
 }
 
 public class JsonException : Exception {
@@ -37,62 +39,100 @@ public class JsonReflectionException(string? message) : Exception(message) {
 	public JsonReflectionException() : this("Invalid type") { }
 }
 
-public class JsonSyntaxException(string? message, JsonReadBuffer? buffer = null) : Exception(buffer == null ? message : $"{message}, throwed at ({buffer.Value.LineIndex}:{buffer.Value.BufferIndex})") {
+public class JsonSyntaxException : Exception {
+	public JsonSyntaxException(string? message, JsonReadBuffer? buffer = null) : base(buffer == null ? message : $"{message}, throwed at ({buffer.LineIndex}:{buffer.BufferIndex}") { }
+
 	public JsonSyntaxException(JsonReadBuffer? buffer = null) : this("Wrong syntax", buffer) { }
+
 }
 
-public abstract class JsonPackable<TCallback> where TCallback : Delegate {
+public sealed partial class JsonLibary {
+	public struct PredicateContext {
+		public required Type Type { get; init; }
+		public Type? FoundType { get; set; }
+	}
 
-	public delegate bool Predicate(Type type, ref Type? foundType);
+	public delegate bool Predicate(ref PredicateContext ctx);
 	public required JsonTypes JsonTypes { get; init; }
-	public required Predicate TypePredicate { get; init; }
+	public required Predicate TPredicate { private get; init; }
+	public required JsonSerialization.Callback SCallback { get; init; }
+	public required JsonDeserialization.Callback DCallback { get; init; }
 
-	public Predicate<Type> TypeChecker => TypeCheck;
-	public required TCallback Callback { get; init; }
+    public bool CheckType(Type type, out Type? foundType) {
+		PredicateContext ctx = new() { Type = type };
+		bool result = TPredicate.Invoke(ref ctx);
+        foundType = ctx.FoundType;
+		return result;
+    }
 
-	private bool TypeCheck(Type type) {
-        Type? foundType = null;
-		return TypePredicate(type, ref foundType);
+	public abstract class Config {
+        private readonly ImmutableList<JsonLibary> _customLibPack = [];
+        public ImmutableList<JsonLibary> LibaryPack { get => _customLibPack.AddRange(DefaultLibaryPack); init => _customLibPack = value; }
     }
 }
-public sealed partial class JsonSerialization : JsonPackable<JsonSerialization.CallbackFunc> {
-
-	public delegate void CallbackFunc(ref StringBuilder sb, object obj, LinkedType linkedType, Config config, int indentCount, Invoker invoker, Type foundType, ref bool hasSkiped);
-    public delegate void Invoker(object? obj, LinkedType linkedType, int indentCount);
-
-    public sealed class Config {
-        private readonly string _indent = "";
-		private readonly ImmutableList<JsonSerialization> _customPack = [];
+public static class JsonSerialization {
+    public sealed class Config : JsonLibary.Config {
 
         public NamingConvetions NamingConvetion { get; init; } = NamingConvetions.Any;
         public ObjectFieldConventions ObjectFieldConvention { get; init; } = ObjectFieldConventions.DoubleQuote;
-        public string Indent {
-            get => _indent;
-            init {
-                for (int i = 0; i < value.Length; i++)
-                    if (!char.IsWhiteSpace(value[i]))
-                        throw new JsonSyntaxException("Wrong indent syntax");
-                _indent = value;
-            }
-        }
+		[Range(0, int.MaxValue)]
+		public int MinNestLevel { get; init; } = 2;
+		public string Indent {
+			get => field;
+			init {
+				for (int i = 0; i < value.Length; i++)
+					if (!char.IsWhiteSpace(value[i]))
+						throw new JsonSyntaxException("Wrong indent syntax");
+				field = value;
+			}
+		} = "";
         public bool IgnoreNullValues { get; init; }
         public bool UnicodeEscape { get; init; }
-        public ImmutableList<JsonSerialization> Pack { get => _customPack.AddRange(DefaultPack); init => _customPack = value; }
+    }
+
+    public delegate void Callback(ref CallbackContext ctx);
+    public delegate void Invoker(object? obj, LinkedType linkedType, int indentCount);
+	public delegate Invoker InvokerInitalizer(ref StringBuilder result);
+
+    public struct CallbackContext {
+		public required StringBuilder Result { get; set; }
+		public bool HasSkiped { get; set; }
+        public required object Object { get; init; }
+		public required LinkedType Type { get; init; }
+		public required Config Config { get; init; }
+		public required int IndentCount { get; init; }
+		public Invoker Invoker { get; set { field ??= value; } }
+        public required Type FoundType {
+            readonly get {
+				if (field == null) throw new NullReferenceException("The found type must be deleted or be found");
+				return field;
+			} init; 
+		}
     }
 }
 
-public sealed partial class JsonDeserialization : JsonPackable<JsonDeserialization.CallbackFunc> {
-
-	public delegate object? CallbackFunc(ref JsonReadBuffer buffer, LinkedType linkedType, Config config, Invoker invoker, Type foundType);
-	public delegate object? Invoker(ref JsonReadBuffer buffer, LinkedType linkedType);
-
-    public sealed class Config {
-        private readonly ImmutableList<JsonDeserialization> _customPack = [];
-
+public static class JsonDeserialization {
+    public sealed class Config : JsonLibary.Config {
         public bool RequiredNamingEquality { get; init; }
-        public ImmutableList<JsonDeserialization> Pack { get => _customPack.AddRange(DefaultPack); init => _customPack = value; } 
         public HashSet<Type> DynamicAvalableTypes { get; init; } = [];
     }
+
+    public delegate object? Callback(ref CallbackContext ctx);
+    public delegate object? Invoker(ref JsonReadBuffer buffer, LinkedType linkedType);
+
+	public struct CallbackContext {
+		public required JsonReadBuffer Buffer { get; set; }
+		public required LinkedType Type { get; init; }
+		public required Config Config { get; init; }
+		public Invoker Invoker { readonly get => field; set { field ??= value; } }
+		public required Type FoundType {
+			readonly get {
+				if (field == null) throw new NullReferenceException("The found type must be deleted or be found");
+				return field;
+			}
+			init;
+		}
+	}
 }
 
 public class LinkedType : IEnumerable<Type> {
@@ -131,7 +171,7 @@ public class LinkedType : IEnumerable<Type> {
 	}
 }
 
-public struct JsonReadBuffer {
+public sealed class JsonReadBuffer {
 	public enum NextType {
 		Punctuation,
 		Block,
@@ -141,8 +181,17 @@ public struct JsonReadBuffer {
 		Undefined,
 	}
 
-	private readonly Queue<string> _nextLines = [];
-	private string buffer = "";
+	private Queue<string> _nextLines = [];
+	private string _buffer = "";
+
+	public JsonReadBuffer Copy() => new() {
+        _buffer = _buffer,
+        _nextLines = new(_nextLines),
+		BufferIndex = BufferIndex,
+		LineIndex = LineIndex,
+    };
+
+	private JsonReadBuffer() { }
 
 	public JsonReadBuffer(string text) {
 		if (string.IsNullOrWhiteSpace(text)) throw new JsonSyntaxException("Invalid text");
@@ -163,17 +212,17 @@ public struct JsonReadBuffer {
 		}
 		if (!oneLine) {
 			_nextLines.Enqueue(line);
-			buffer = _nextLines.Dequeue();
-		} else buffer = line;
+			_buffer = _nextLines.Dequeue();
+		} else _buffer = line;
 	}
 
-	private readonly bool IsNEOB => BufferIndex < buffer.Length;
+	private bool IsNEOB => BufferIndex < _buffer.Length;
 
 	public int BufferIndex { get; private set; }
 	public int LineIndex { get; private set; }
 
-	public readonly override string ToString() {
-		return buffer != "" ? $"({LineIndex}:{BufferIndex}) -> \"{buffer}\", {_nextLines.Count} lines left" : "N/A";
+	public override string ToString() {
+		return _buffer != "" ? $"({LineIndex}:{BufferIndex}) -> \"{_buffer}\", {_nextLines.Count} lines left" : "N/A";
 	}
 
 	private void ReadNextLine() {
@@ -183,7 +232,7 @@ public struct JsonReadBuffer {
 		LineIndex++;
 		BufferIndex = 0;
 		if (string.IsNullOrWhiteSpace(nextLine)) goto read;
-		buffer = nextLine;
+		_buffer = nextLine;
 	}
 
 	public bool NextIsNull() {
@@ -191,12 +240,12 @@ public struct JsonReadBuffer {
 		bool comment = false;
 		repeat:
 		for (; IsNEOB; BufferIndex++) {
-			string slice2 = buffer.Slice(BufferIndex, 2);
+			string slice2 = _buffer.Slice(BufferIndex, 2);
 			if (slice2 == "//") {
-				BufferIndex = buffer.Length;
+				BufferIndex = _buffer.Length;
 				break;
 			}
-			char c = buffer[BufferIndex];
+			char c = _buffer[BufferIndex];
 			if (comment && slice2 == "*/") {
 				comment = false;
 				BufferIndex++;
@@ -208,8 +257,8 @@ public struct JsonReadBuffer {
 			}
 			if (comment || char.IsWhiteSpace(c))
 				continue;
-			if (c == 'n' && buffer.Slice(BufferIndex, JsonSerializer.Null.Length) == JsonSerializer.Null) {
-				BufferIndex += JsonSerializer.Null.Length;
+			if (c == 'n' && _buffer.Slice(BufferIndex, Null.Length) == Null) {
+				BufferIndex += Null.Length;
 				return true;
 			}
 			return false;
@@ -223,12 +272,12 @@ public struct JsonReadBuffer {
 		bool comment = false;
 		repeat:
 		for (; IsNEOB; BufferIndex++) {
-			string slice2 = buffer.Slice(BufferIndex, 2);
+			string slice2 = _buffer.Slice(BufferIndex, 2);
 			if (slice2 == "//") {
-				BufferIndex = buffer.Length;
+				BufferIndex = _buffer.Length;
 				break;
 			}
-			char c = buffer[BufferIndex];
+			char c = _buffer[BufferIndex];
 			if (comment && slice2 == "*/") {
 				comment = false;
 				BufferIndex++;
@@ -268,12 +317,12 @@ public struct JsonReadBuffer {
 		bool comment = false;
 		repeat:
 		for (; IsNEOB; BufferIndex++) {
-			string slice2 = buffer.Slice(BufferIndex, 2);
+			string slice2 = _buffer.Slice(BufferIndex, 2);
 			if (slice2 == "//") {
-				BufferIndex = buffer.Length;
+				BufferIndex = _buffer.Length;
 				break;
 			}
-			char c = buffer[BufferIndex];
+			char c = _buffer[BufferIndex];
 			if (comment && slice2 == "*/") {
 				comment = false;
 				BufferIndex++;
@@ -301,7 +350,7 @@ public struct JsonReadBuffer {
 		do {
 			ReadNextLine();
 			for (; IsNEOB; BufferIndex++) {
-				char c = buffer[BufferIndex];
+				char c = _buffer[BufferIndex];
 
 				switch (c) {
 					case '\'':
@@ -311,7 +360,7 @@ public struct JsonReadBuffer {
 						bool isEscaped = false;
 						read_string:
 						for (; IsNEOB; BufferIndex++) {
-							c = buffer[BufferIndex];
+							c = _buffer[BufferIndex];
 							if (c == '\\') { isEscaped = !isEscaped; continue; }
 							if (isEscaped) { isEscaped = false; continue; }
 							if (c == quote)
@@ -349,26 +398,26 @@ public struct JsonReadBuffer {
 	public string ReadObjectFieldName() {
 		ReadNextLine();
 		int start = BufferIndex;
-		for (; start < buffer.Length; start++) if (!char.IsWhiteSpace(buffer[start])) break;
-		char quote = buffer[start] switch { '"' => '"', '\'' => '\'', _ => '\0' };
+		for (; start < _buffer.Length; start++) if (!char.IsWhiteSpace(_buffer[start])) break;
+		char quote = _buffer[start] switch { '"' => '"', '\'' => '\'', _ => '\0' };
 
 		int end;
 		if (quote != '\0') {
 			end = ++start;
 			bool isSlash = false;
-			for (; end < buffer.Length; end++) {
-				char c = buffer[end];
+			for (; end < _buffer.Length; end++) {
+				char c = _buffer[end];
 				if (c == '\\') { isSlash = !isSlash; continue; }
 				if (isSlash) { isSlash = false; continue; }
 				if (c == quote) break;
 			}
 			BufferIndex = end + 1;
 			SeekPropEndChar();
-			return UnescapeString(buffer[start..end]);
+			return UnescapeString(_buffer[start..end]);
 		}
         end = start;
-        for (; end < buffer.Length; end++) {
-            char c = buffer[end];
+        for (; end < _buffer.Length; end++) {
+            char c = _buffer[end];
             if (c == ':') {
                 BufferIndex = end + 1;
                 goto skipFinder;
@@ -381,7 +430,7 @@ public struct JsonReadBuffer {
         BufferIndex = end + 1;
         SeekPropEndChar();
 		skipFinder:
-        string value = buffer[start..end];
+        string value = _buffer[start..end];
         if (value.Length == 0) throw new JsonSyntaxException($"Size of property name cannot be zero", this);
         return value;
     }
@@ -390,8 +439,8 @@ public struct JsonReadBuffer {
 		ReadNextLine();
 
 		char quote = '"';
-		for (; BufferIndex < buffer.Length; BufferIndex++) {
-			char c = buffer[BufferIndex];
+		for (; BufferIndex < _buffer.Length; BufferIndex++) {
+			char c = _buffer[BufferIndex];
 			if (c is '"' or '\'') {
 				quote = c;
 				break;
@@ -405,11 +454,11 @@ public struct JsonReadBuffer {
 		StringBuilder sb = new();
 
 		int end = BufferIndex;
-		for (; end < buffer.Length; end++) {
-			char c = buffer[end];
-			if (c == '\\' && end + 1 == buffer.Length) {
+		for (; end < _buffer.Length; end++) {
+			char c = _buffer[end];
+			if (c == '\\' && end + 1 == _buffer.Length) {
 				end = -1;
-				BufferIndex = buffer.Length;
+				BufferIndex = _buffer.Length;
 				ReadNextLine();
 				sb.Append('\n');
 				continue;
@@ -417,7 +466,7 @@ public struct JsonReadBuffer {
 			if (c == quote) break;
 			sb.Append(c);
 		}
-		if (end == buffer.Length) throw new JsonSyntaxException($"Unterminated string", this);
+		if (end == _buffer.Length) throw new JsonSyntaxException($"Unterminated string", this);
 
 		BufferIndex = end + 1;
 		return UnescapeString(sb.ToString());
@@ -427,25 +476,26 @@ public struct JsonReadBuffer {
 		ReadNextLine();
 
 		int start = BufferIndex;
-		for (; start < buffer.Length; start++)
-			if (!char.IsWhiteSpace(buffer[start]))
+		for (; start < _buffer.Length; start++)
+			if (!char.IsWhiteSpace(_buffer[start]))
 				break;
-		if (start == buffer.Length)
+		if (start == _buffer.Length)
 			throw new JsonSyntaxException($"Unexpected end of primitive value", this);
 
 		int end = start;
-		for (; end < buffer.Length; end++) {
-			char c = buffer[end];
+		for (; end < _buffer.Length; end++) {
+			char c = _buffer[end];
 			if (c is ',' or '}' or ']' || char.IsWhiteSpace(c)) break;
 		}
 
 		BufferIndex = end;
-		return buffer[start..end];
+		return _buffer[start..end];
 	}
 
-	public bool TryReadString(out string result) => TryRead(ReadString, out result);
-	public bool TryReadPrimitive(out string result) => TryRead(ReadPrimitive, out result);
+    public bool TryReadString(out string result) => TryRead(ReadString, out result);
+    public bool TryReadPrimitive(out string result) => TryRead(ReadPrimitive, out result);
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static bool TryRead(Func<string> reader, out string result) {
 		try {
 			result = reader.Invoke();
@@ -459,7 +509,7 @@ public struct JsonReadBuffer {
 	private void SeekPropEndChar() {
 		repeat:
 		while (IsNEOB) {
-			char c = buffer[BufferIndex++];
+			char c = _buffer[BufferIndex++];
 			if (c == ':') return;
 			if (!char.IsWhiteSpace(c)) throw new JsonSyntaxException($"Expected ':', found '{c}'", this);
 		}

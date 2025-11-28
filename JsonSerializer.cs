@@ -23,16 +23,29 @@ public static partial class JsonSerializer {
         }
         var type = linkedType.Value;
         var nullableValue = Nullable.GetUnderlyingType(type);
-        if (nullableValue != null) Serialize(ref sb, obj, new(nullableValue, linkedType), config, indentCount);
+        if (nullableValue != null) obj = nullableValue;
         try {
-            foreach (var s in config.Pack) {
-                Type? foundType = null;
-                if (!s.TypePredicate(linkedType.Value, ref foundType)) continue;
-                StringBuilder sbTemp = new(sb.ToString());
-                bool hasSkiped = false;
-                s.Callback.Invoke(ref sbTemp, obj, linkedType, config, indentCount, (o, lt, ic) => Serialize(ref sbTemp, o, lt, config, ic), foundType, ref hasSkiped);
-                if (hasSkiped) continue;
-                sb = sbTemp;
+            foreach (var lib in config.LibaryPack) {
+                if (!lib.CheckType(linkedType.Value, out var foundType)) continue;
+
+                JsonSerialization.CallbackContext ctx = new() {
+                    Result = sb.Copy(),
+                    Object = obj,
+                    Type = linkedType,
+                    Config = config,
+                    IndentCount = indentCount,
+#pragma warning disable CS8601
+					FoundType = foundType,
+#pragma warning restore CS8601
+				};
+                ctx.Invoker = (o, lt, ic) => {
+                    StringBuilder result = ctx.Result;
+                    Serialize(ref result, o, lt, config, ic);
+                    ctx.Result = result;
+                };
+				lib.SCallback.Invoke(ref ctx);
+                if (ctx.HasSkiped) continue;
+                sb = ctx.Result;
                 return;
             }
             throw new JsonReflectionException();
@@ -95,7 +108,7 @@ public static partial class JsonSerializer {
             if (type == typeof(object)) {
                 foreach (var t in config.DynamicAvalableTypes) {
                     try {
-                        var tempBuffer = buffer;
+                        var tempBuffer = buffer.Copy();
                         var result = Deserialize(ref tempBuffer, new(t, null), config);
                         buffer = tempBuffer;
                         return result;
@@ -105,13 +118,20 @@ public static partial class JsonSerializer {
             }
 
             if (type.IsInterface || type.IsAbstract) throw new JsonReflectionException("The type cannot be ethier an interface or an abstract class");
-            foreach (var d in config.Pack) {
-                Type? foundType = null;
-                if (!d.TypePredicate(type, ref foundType)) continue;
-                var tempBuffer = buffer;
-                var result = d.Callback.Invoke(ref tempBuffer, linkedType, config, (ref buf, lt) => Deserialize(ref buf, lt, config), foundType);
+            foreach (var lib in config.LibaryPack) {
+                if (!lib.CheckType(type, out var foundType)) continue;
+                JsonDeserialization.CallbackContext ctx = new() {
+                    Buffer = buffer.Copy(),
+                    Type = linkedType,
+                    Config = config,
+#pragma warning disable CS8601
+					FoundType = foundType,
+#pragma warning restore CS8601
+					Invoker = (ref buffer, lt) => Deserialize(ref buffer, lt, config)
+                };
+                var result = lib.DCallback.Invoke(ref ctx);
                 if (result == null) continue;
-                buffer = tempBuffer;
+                buffer = ctx.Buffer;
                 return result;
             }
             throw new JsonReflectionException();

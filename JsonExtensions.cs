@@ -1,15 +1,20 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SonicD5.Json;
 
 public static partial class JsonSerializer {
-	public static bool HasJsonTypes<T>(this Type t, IEnumerable<JsonPackable<T>> pack, JsonTypes types) where T : Delegate => pack.Any(p => p.TypeChecker.Invoke(t) && p.JsonTypes.HasFlag(types));
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static StringBuilder Copy(this StringBuilder sb) => new(sb.ToString());
 
-	public static MemberInfo[] GetFieldsAndProperties(this Type type) => [.. type.GetMembers(BindingFlags.Public | BindingFlags.Instance)
-        .Where(m => m.MemberType == MemberTypes.Field || (m is PropertyInfo p && p.CanWrite && p.CanRead && p.GetIndexParameters().Length == 0))];
+    public static bool HasJsonTypes(this Type t, IEnumerable<JsonLibary> pack, params IEnumerable<JsonTypes> types) {
+		var lib = pack.First(l => l.CheckType(t, out _));
+		return types.Any(t => lib.JsonTypes.HasFlag(t));
+    }
+
+    public static MemberInfo[] GetFieldsAndProperties(this Type type, Func<MemberInfo, bool> memberFilter, BindingFlags bindingFlags = BindingFlags.Public) => [.. type.GetMembers(BindingFlags.Instance | bindingFlags).Where(m => m is PropertyInfo p ? p.GetIndexParameters().Length == 0 : true && memberFilter(m))];
 
 	public static string? Escape(this string? str, bool unicodeEscape = false) {
 		if (str == null) return null;
