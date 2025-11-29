@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using System.Reflection.Metadata.Ecma335;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace SonicD5.Json;
@@ -10,6 +11,8 @@ namespace SonicD5.Json;
 public sealed partial class JsonLibary {
     [GeneratedRegex(@"^[-+]?0[xX]")]
     private static partial Regex HexRegex();
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static T HexApplier<T>(T number, bool isNegative) where T : ISignedNumber<T> => isNegative ? -number : number;
 
     private static readonly List<JsonLibary> DefaultLibaryPack = [

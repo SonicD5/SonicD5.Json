@@ -1,6 +1,5 @@
 ﻿using System.Collections;
 using System.Collections.Immutable;
-using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -75,7 +74,7 @@ public static class JsonSerialization {
 
         public NamingConvetions NamingConvetion { get; init; } = NamingConvetions.Any;
         public ObjectFieldConventions ObjectFieldConvention { get; init; } = ObjectFieldConventions.DoubleQuote;
-		[Range(0, int.MaxValue)]
+		
 		public int MinNestLevel { get; init; } = 2;
 		public string Indent {
 			get => field;
@@ -226,8 +225,8 @@ public sealed class JsonReadBuffer {
 	}
 
 	private void ReadNextLine() {
-		read:
 		if (IsNEOB) return;
+		read:
 		if (!_nextLines.TryDequeue(out string? nextLine)) throw new JsonSyntaxException($"Unexpected end of JSON input", this);
 		LineIndex++;
 		BufferIndex = 0;
