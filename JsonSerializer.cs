@@ -117,7 +117,6 @@ public static partial class JsonSerializer {
                 throw new JsonReflectionException("Invalid dynamic type cast");
             }
 
-            if (type.IsInterface || type.IsAbstract) throw new JsonReflectionException("The type cannot be ethier an interface or an abstract class");
             foreach (var lib in config.LibaryPack) {
                 if (!lib.CheckType(type, out var foundType)) continue;
                 JsonDeserialization.CallbackContext ctx = new() {
