@@ -100,7 +100,7 @@ public sealed partial class JsonLibary {
             SCallback = SerializeCollection,
             DCallback = (ref ctx) => {
                 var eType = ctx.FoundType.GetGenericArguments()[0];
-                return DeserializeCollection(ref ctx, !ctx.Type.Value.GetInterfaces().Contains(typeof(ICollection<>).MakeGenericType(eType)));
+                return DeserializeCollection(ref ctx, ctx.Type.Value.GetInterfaces().Contains(typeof(IReadOnlyCollection<>).MakeGenericType(eType)));
             }
         },
         new() {
@@ -310,7 +310,7 @@ public sealed partial class JsonLibary {
 
         if (next != JsonReadBuffer.NextType.Array)
             throw new JsonSyntaxException($"The object start must be '['", ctx.Buffer);
-        var type = linkedEType.Previous!.Value;
+        var type = ctx.Type.Value;
         next = ctx.Buffer.NextBlock();
         if (next == JsonReadBuffer.NextType.EndArray)
             return Activator.CreateInstance(type)!;

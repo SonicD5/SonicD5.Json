@@ -49,6 +49,7 @@ public sealed partial class JsonLibary {
 	public struct PredicateContext {
 		public required Type Type { get; init; }
 		public Type? FoundType { get; set; }
+		public bool IsAsync { get; init; } 
 	}
 
 	public delegate bool Predicate(ref PredicateContext ctx);
@@ -221,7 +222,8 @@ public sealed class JsonReadBuffer {
 	public int LineIndex { get; private set; }
 
 	public override string ToString() {
-		return _buffer != "" ? $"({LineIndex}:{BufferIndex}) -> \"{_buffer}\", {_nextLines.Count} lines left" : "N/A";
+		char c = _buffer[BufferIndex];
+		return _buffer != "" ? $"({LineIndex}:{BufferIndex}|'{(c == '\'' ? "\\'" : c)}') -> ({_buffer}), {_nextLines.Count} lines left" : "N/A";
 	}
 
 	private void ReadNextLine() {

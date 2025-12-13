@@ -6,6 +6,7 @@ using System.Text;
 namespace SonicD5.Json;
 
 public static partial class JsonSerializer {
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static StringBuilder Copy(this StringBuilder sb) => new(sb.ToString());
 

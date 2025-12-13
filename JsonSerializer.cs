@@ -116,7 +116,6 @@ public static partial class JsonSerializer {
                 }
                 throw new JsonReflectionException("Invalid dynamic type cast");
             }
-
             foreach (var lib in config.LibaryPack) {
                 if (!lib.CheckType(type, out var foundType)) continue;
                 JsonDeserialization.CallbackContext ctx = new() {

@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using static SonicD5.Json.JsonSerializer;
 
 namespace SonicD5.Json;
@@ -127,7 +128,10 @@ public static class JsonSystemLibaries {
             while (true) {
                 if (next == JsonReadBuffer.NextType.Undefined) {
                     var buffer = ctx.Buffer.Copy();
-                    JsonReadBuffer keyBuffer = new($"\"{buffer.ReadObjectFieldName()}\"");
+                    string key = buffer.ReadObjectFieldName();
+                    // prevents to add schema
+                    if (key == "$schema") continue;
+                    JsonReadBuffer keyBuffer = new($"\"{key}\"");
                     dict.Add(ctx.Invoker.Invoke(ref keyBuffer, new(kType, ctx.Type))!, ctx.Invoker.Invoke(ref buffer, linkedVType));
                     ctx.Buffer = buffer;
                     next = ctx.Buffer.NextBlock();
@@ -140,8 +144,7 @@ public static class JsonSystemLibaries {
                         break;
                     continue;
                 }
-                if (next == JsonReadBuffer.NextType.EndBlock)
-                    break;
+                if (next == JsonReadBuffer.NextType.EndBlock) break;
                 throw new JsonSyntaxException(ctx.Buffer);
             }
 
