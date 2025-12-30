@@ -199,7 +199,7 @@ public static partial class JsonSerializer {
 		return sb.ToString();
 	}
 
-	internal static string Slice(this string source, int start, int count) {
+	public static string Slice(this string source, int start, int count) {
 		if (string.IsNullOrEmpty(source)) return source;
 		int length = source.Length;
 		int normalizedStart = start < 0 ? Math.Max(length + start, 0) : Math.Min(start, length);
@@ -209,10 +209,9 @@ public static partial class JsonSerializer {
 	}
 
 	public static string StringType(Type type, bool hideGenericArgs = false) {
-		var nullableValue = Nullable.GetUnderlyingType(type);
-		if (nullableValue != null) return $"{StringType(nullableValue, hideGenericArgs)}?";
 		StringBuilder sb = new();
-		if (!string.IsNullOrEmpty(type.Namespace)) sb.Append($"{type.Namespace}.");
+		if (type.IsNested) sb.Append($"{StringType(type.DeclaringType!, true)}+");
+		else if (!string.IsNullOrEmpty(type.Namespace)) sb.Append($"{type.Namespace}.");
 		if (type.IsGenericType) {
 			var genericArgs = type.GetGenericArguments();
 			sb.Append(type.Name[..type.Name.IndexOf('`')]);
@@ -220,6 +219,8 @@ public static partial class JsonSerializer {
 			sb.Append(hideGenericArgs ? new(',', genericArgs.Length - 1) : string.Join(", ", genericArgs.Select(t => StringType(t))));
 			sb.Append('>');
 		} else sb.Append(type.Name);
+		var nullableValue = Nullable.GetUnderlyingType(type);
+		if (nullableValue != null) sb.Append('?');
 		return sb.ToString();
 	}
 
