@@ -53,6 +53,26 @@ public static partial class JsonSerializer {
 		return sb.ToString();
 	}
 
+	/// <summary>
+	/// Thanks for raw version of case converter to https://github.com/markcastle/CaseConverter
+	/// </summary>
+	/// <param name="str"></param>
+	/// <param name="convention"></param>
+	/// <returns></returns>
+	public static string ConvertCase(this string str, NamingConvetions convention) {
+		if (string.IsNullOrEmpty(str)) return str;
+
+		return convention switch {
+			NamingConvetions.Any => str,
+			NamingConvetions.SnakeCase => ToSnakeCase(str),
+			NamingConvetions.KebabCase => ToKebabCase(str),
+			NamingConvetions.PascalCase => ToPascalCase(str),
+			NamingConvetions.CamelCase => ToCamelCase(str),
+			_ => str
+		};
+	}
+
+	#region Case convertion
 	private static string ToKebabCase(string str) {
 		StringBuilder sb = new();
 		bool previousSymbIsSeparator = true;
@@ -61,17 +81,16 @@ public static partial class JsonSerializer {
 			char symb = str[i];
 
 			if (char.IsUpper(symb) || char.IsDigit(symb)) {
-				if (!previousSymbIsSeparator && i > 0 && (char.IsLower(str[i - 1]) || (i < str.Length - 1 && char.IsLower(str[i + 1])))) sb.Append('-');
+				if (!previousSymbIsSeparator && i > 0 && (char.IsLower(str[i - 1]) || (i < str.Length - 1 && char.IsLower(str[i + 1]))))
+					sb.Append('-');
 				sb.Append(char.ToLowerInvariant(symb));
 				previousSymbIsSeparator = false;
-			}
-			else if (char.IsLower(symb)) {
+			} else if (char.IsLower(symb)) {
 				sb.Append(symb);
 				previousSymbIsSeparator = false;
-			}
-
-			else if (symb is ' ' or '_' or '-') {
-				if (!previousSymbIsSeparator) sb.Append('-');
+			} else if (symb is ' ' or '_' or '-') {
+				if (!previousSymbIsSeparator)
+					sb.Append('-');
 				previousSymbIsSeparator = true;
 			}
 		}
@@ -118,7 +137,8 @@ public static partial class JsonSerializer {
 					break;
 
 				default:
-					if (previousCategory != null) previousCategory = UnicodeCategory.SpaceSeparator;
+					if (previousCategory != null)
+						previousCategory = UnicodeCategory.SpaceSeparator;
 					continue;
 			}
 			sb.Append(symb);
@@ -128,22 +148,26 @@ public static partial class JsonSerializer {
 	}
 
 	private static string ToCamelCase(string str, bool removeWhitespace = true, bool preserveLeadingUnderscore = false) {
-		if (str.All(c => !char.IsLetter(c) && char.IsUpper(c))) str = str.ToLower(); 
+		if (str.All(c => !char.IsLetter(c) && char.IsUpper(c)))
+			str = str.ToLower();
 
 		bool addLeadingUnderscore = preserveLeadingUnderscore && str.StartsWith('_');
 		StringBuilder sb = new(str.Length);
 		bool toUpper = false;
 
 		foreach (char c in str) {
-			if (c is '-' or '_' || (removeWhitespace && char.IsWhiteSpace(c))) toUpper = true;
+			if (c is '-' or '_' || (removeWhitespace && char.IsWhiteSpace(c)))
+				toUpper = true;
 			else {
 				sb.Append(toUpper ? char.ToUpperInvariant(c) : c);
 				toUpper = false;
 			}
 		}
 
-		if (sb.Length > 0) sb[0] = char.ToLowerInvariant(sb[0]);
-		if (addLeadingUnderscore) sb.Insert(0, '_');
+		if (sb.Length > 0)
+			sb[0] = char.ToLowerInvariant(sb[0]);
+		if (addLeadingUnderscore)
+			sb.Insert(0, '_');
 		return sb.ToString();
 	}
 
@@ -159,37 +183,18 @@ public static partial class JsonSerializer {
 				if (newWord) {
 					sb.Append(textInfo.ToUpper(currentChar));
 					newWord = false;
-				}
-				else sb.Append(i < str.Length - 1 && char.IsUpper(currentChar) && char.IsLower(str[i + 1]) ? currentChar : char.ToLowerInvariant(currentChar));
-			}
-			else newWord = true;
+				} else
+					sb.Append(i < str.Length - 1 && char.IsUpper(currentChar) && char.IsLower(str[i + 1]) ? currentChar : char.ToLowerInvariant(currentChar));
+			} else
+				newWord = true;
 
-			if (i < str.Length - 1 && char.IsLower(str[i]) && char.IsUpper(str[i + 1])) newWord = true;
+			if (i < str.Length - 1 && char.IsLower(str[i]) && char.IsUpper(str[i + 1]))
+				newWord = true;
 		}
 
 		return sb.ToString();
 	}
-
-
-
-	/// <summary>
-	/// Thanks for raw version of case converter to https://github.com/markcastle/CaseConverter
-	/// </summary>
-	/// <param name="str"></param>
-	/// <param name="convention"></param>
-	/// <returns></returns>
-	public static string ConvertCase(this string str, NamingConvetions convention) {
-		if (string.IsNullOrEmpty(str)) return str;
-
-		return convention switch {
-			NamingConvetions.Any => str,
-			NamingConvetions.SnakeCase => ToSnakeCase(str),
-			NamingConvetions.KebabCase => ToKebabCase(str),
-			NamingConvetions.PascalCase => ToPascalCase(str),
-			NamingConvetions.CamelCase => ToCamelCase(str),
-			_ => str
-		};
-	}
+	#endregion
 
 	public static string? Repeat(this string? str, int count) {
 		if (count <= 0) return "";
