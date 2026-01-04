@@ -38,18 +38,15 @@ public class JsonReflectionException(string? message) : Exception(message) {
 	public JsonReflectionException() : this("Invalid type") { }
 }
 
-public class JsonSyntaxException : Exception {
-	public JsonSyntaxException(string? message, JsonReadBuffer? buffer = null) : base(buffer == null ? message : $"{message}, throwed at ({buffer.LineIndex}:{buffer.BufferIndex}") { }
-
-	public JsonSyntaxException(JsonReadBuffer? buffer = null) : this("Wrong syntax", buffer) { }
+public class JsonSyntaxException(string? message, JsonReadBuffer? buffer = null) : Exception(buffer == null ? message : $"{message}, throwed at ({buffer.LineIndex}:{buffer.BufferIndex}") {
+    public JsonSyntaxException(JsonReadBuffer? buffer = null) : this("Wrong syntax", buffer) { }
 
 }
 
-public sealed partial class JsonLibary {
+public sealed partial class JsonCodec {
 	public struct PredicateContext {
 		public required Type Type { get; init; }
 		public Type? FoundType { get; set; }
-		public bool IsAsync { get; init; } 
 	}
 
 	public delegate bool Predicate(ref PredicateContext ctx);
@@ -66,12 +63,12 @@ public sealed partial class JsonLibary {
     }
 
 	public abstract class Config {
-        private readonly ImmutableList<JsonLibary> _customLibPack = [];
-        public ImmutableList<JsonLibary> LibaryPack { get => _customLibPack.AddRange(DefaultLibaryPack); init => _customLibPack = value; }
+        private readonly ImmutableList<JsonCodec> _customCodecPack = [];
+        public ImmutableList<JsonCodec> CodecPack { get => _customCodecPack.AddRange(DefaultCodecPack); init => _customCodecPack = value; }
     }
 }
 public static class JsonSerialization {
-    public sealed class Config : JsonLibary.Config {
+    public sealed class Config : JsonCodec.Config {
 
         public NamingConvetions NamingConvetion { get; init; } = NamingConvetions.Any;
         public ObjectFieldConventions ObjectFieldConvention { get; init; } = ObjectFieldConventions.DoubleQuote;
@@ -112,7 +109,7 @@ public static class JsonSerialization {
 }
 
 public static class JsonDeserialization {
-    public sealed class Config : JsonLibary.Config {
+    public sealed class Config : JsonCodec.Config {
         public bool RequiredNamingEquality { get; init; }
         public HashSet<Type> DynamicAvalableTypes { get; init; } = [];
     }

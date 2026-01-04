@@ -5,9 +5,9 @@ using static SonicD5.Json.JsonSerializer;
 
 namespace SonicD5.Json;
 
-public static class JsonSystemLibaries {
+public static class JsonSystemCodecs {
 
-	public static readonly JsonLibary CharLibary = new() { 
+	public static readonly JsonCodec CharCodec = new() { 
 		TPredicate = (ref ctx) => ctx.Type == typeof(char),
 		JsonTypes = JsonTypes.String,
 		SCallback = (ref ctx) => { 
@@ -23,7 +23,7 @@ public static class JsonSystemLibaries {
         }
     };
 
-	public static readonly Func<string?, JsonLibary> DateTimeLibary = format => new() {
+	public static readonly Func<string?, JsonCodec> DateTimeCodec = format => new() {
 		TPredicate = (ref ctx) => ctx.Type == typeof(DateTime),
 		JsonTypes = JsonTypes.Number | JsonTypes.String,
 		SCallback = (ref ctx) => { 
@@ -48,7 +48,7 @@ public static class JsonSystemLibaries {
         }
     };
 
-    public static readonly JsonLibary TypeLibary = new() {
+    public static readonly JsonCodec TypeCodec = new() {
         TPredicate = (ref ctx) => ctx.Type.IsAssignableTo(typeof(Type)),
         JsonTypes = JsonTypes.String,
         SCallback = (ref ctx) => ctx.Result.Append($"\"{StringType((Type)ctx.Object)}\""),
@@ -56,14 +56,14 @@ public static class JsonSystemLibaries {
     };
 
 
-	public static readonly JsonLibary StringKeyDictionaryLibary = new() {
+	public static readonly JsonCodec StringKeyDictionaryCodec = new() {
 		TPredicate = (ref ctx) => {
 			ctx.FoundType = ctx.Type.GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
 			return ctx.FoundType != null;
 		},
 		JsonTypes = JsonTypes.Object,
 		SCallback = (ref ctx) => {
-            if (!ctx.FoundType.GetGenericArguments()[0].HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.String)) {
+            if (!ctx.FoundType.GetGenericArguments()[0].HasJsonTypes(ctx.Config.CodecPack, JsonTypes.String)) {
                 ctx.HasSkiped = true;
                 return;
             }
@@ -79,14 +79,14 @@ public static class JsonSystemLibaries {
 			int newIndentCount = 0;
 			if (ctx.IndentCount < ctx.Config.MinNestLevel) newIndentCount = ctx.IndentCount + 1;
 			else if (hasIndent) foreach (var v in dict.Values) {
-				if (v != null && v.GetType().HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Array, JsonTypes.Object)) {
+				if (v != null && v.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 					newIndentCount = ctx.IndentCount + 1;
 					break;
 				}
 			};
 			bool notNested = newIndentCount != 0;
 
-			if (!ctx.Type.Value.HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Object) && notNested)
+			if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested)
 				ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
 			ctx.Result.Append('{');
 			foreach (var key in dict.Keys) {
@@ -114,7 +114,7 @@ public static class JsonSystemLibaries {
 		},
         DCallback = (ref ctx) => {
             var kType = ctx.FoundType.GetGenericArguments()[0];
-			if (!kType.HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.String)) return null;
+			if (!kType.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.String)) return null;
             var type = ctx.Type.Value;
             var next = ctx.Buffer.Next();
             if (next != JsonReadBuffer.NextType.Block) throw new JsonSyntaxException(ctx.Buffer);

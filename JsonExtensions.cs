@@ -10,9 +10,9 @@ public static partial class JsonSerializer {
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static StringBuilder Copy(this StringBuilder sb) => new(sb.ToString());
 
-    public static bool HasJsonTypes(this Type t, IEnumerable<JsonLibary> pack, params IEnumerable<JsonTypes> types) {
-		var lib = pack.First(l => l.CheckType(t, out _));
-		return types.Any(t => lib.JsonTypes.HasFlag(t));
+    public static bool HasJsonTypes(this Type t, IEnumerable<JsonCodec> pack, params IEnumerable<JsonTypes> types) {
+		var codec = pack.First(c => c.CheckType(t, out _));
+		return types.Any(t => codec.JsonTypes.HasFlag(t));
     }
 
     public static MemberInfo[] GetFieldsAndProperties(this Type type, Func<MemberInfo, bool> memberFilter, BindingFlags bindingFlags = BindingFlags.Public) => [.. type.GetMembers(BindingFlags.Instance | bindingFlags).Where(m => m is PropertyInfo p ? p.GetIndexParameters().Length == 0 : true && memberFilter(m))];

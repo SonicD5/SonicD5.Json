@@ -8,14 +8,14 @@ using System.Text.RegularExpressions;
 
 namespace SonicD5.Json;
 
-public sealed partial class JsonLibary {
+public sealed partial class JsonCodec {
     [GeneratedRegex(@"^[-+]?0[xX]")]
     private static partial Regex HexRegex();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static T HexApplier<T>(T number, bool isNegative) where T : ISignedNumber<T> => isNegative ? -number : number;
 
-    private static readonly List<JsonLibary> DefaultLibaryPack = [
+    private static readonly List<JsonCodec> DefaultCodecPack = [
         new() {
             TPredicate = (ref ctx) => ctx.Type.IsAssignableTo(typeof(string)),
             JsonTypes = JsonTypes.String,
@@ -134,7 +134,7 @@ public sealed partial class JsonLibary {
 			Type? type = null;
 			if (m is FieldInfo f) type = f.FieldType;
 			else if (m is PropertyInfo p) type = p.PropertyType;
-			if (type!.HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Array, JsonTypes.Object)) {
+			if (type!.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 				newIndentCount = ctx.IndentCount + 1;
                 break;
 			}
@@ -142,7 +142,7 @@ public sealed partial class JsonLibary {
         bool notNested = newIndentCount != 0;
 		string quoute = ctx.Config.ObjectFieldConvention == ObjectFieldConventions.NoQuote ? "" : ((char)ctx.Config.ObjectFieldConvention).ToString();
 
-		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Object) && notNested) 
+		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested) 
             ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
 		ctx.Result.Append('{');
 
@@ -193,14 +193,14 @@ public sealed partial class JsonLibary {
 		int newIndentCount = 0;
 		if (ctx.IndentCount < ctx.Config.MinNestLevel) newIndentCount = ctx.IndentCount + 1;
 		else if (hasIndent) foreach (var v in array) {
-			if (v != null && v.GetType().HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Array, JsonTypes.Object)) {
+			if (v != null && v.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 				newIndentCount = ctx.IndentCount + 1;
 				break;
 			}
 		};
 		bool notNested = newIndentCount != 0;
 
-		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Object) && notNested) 
+		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested) 
             ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
 		ctx.Result.Append('[');
 
@@ -235,14 +235,14 @@ public sealed partial class JsonLibary {
 		int newIndentCount = 0;
 		if (ctx.IndentCount < ctx.Config.MinNestLevel) newIndentCount = ctx.IndentCount + 1;
 		else if (hasIndent) foreach (var i in collection) {
-			if (i != null && i.GetType().HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Array, JsonTypes.Object)) {
+			if (i != null && i.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 				newIndentCount = ctx.IndentCount + 1;
 				break;
 			}
 		};
 		bool notNested = newIndentCount != 0;
 
-		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.LibaryPack, JsonTypes.Object) && notNested)
+		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested)
 			ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
 		ctx.Result.Append('[');
 

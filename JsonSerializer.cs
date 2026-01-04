@@ -25,8 +25,8 @@ public static partial class JsonSerializer {
         var nullableValue = Nullable.GetUnderlyingType(type);
         if (nullableValue != null) obj = nullableValue;
         try {
-            foreach (var lib in config.LibaryPack) {
-                if (!lib.CheckType(linkedType.Value, out var foundType)) continue;
+            foreach (var codec in config.CodecPack) {
+                if (!codec.CheckType(linkedType.Value, out var foundType)) continue;
 
                 JsonSerialization.CallbackContext ctx = new() {
                     Result = sb.Copy(),
@@ -43,7 +43,7 @@ public static partial class JsonSerializer {
                     Serialize(ref result, o, lt, config, ic);
                     ctx.Result = result;
                 };
-				lib.SCallback.Invoke(ref ctx);
+				codec.SCallback.Invoke(ref ctx);
                 if (ctx.HasSkiped) continue;
                 sb = ctx.Result;
                 return;
@@ -116,8 +116,8 @@ public static partial class JsonSerializer {
                 }
                 throw new JsonReflectionException("Invalid dynamic type cast");
             }
-            foreach (var lib in config.LibaryPack) {
-                if (!lib.CheckType(type, out var foundType)) continue;
+            foreach (var codec in config.CodecPack) {
+                if (!codec.CheckType(type, out var foundType)) continue;
                 JsonDeserialization.CallbackContext ctx = new() {
                     Buffer = buffer.Copy(),
                     Type = linkedType,
@@ -127,7 +127,7 @@ public static partial class JsonSerializer {
 #pragma warning restore CS8601
 					Invoker = (ref buffer, lt) => Deserialize(ref buffer, lt, config)
                 };
-                var result = lib.DCallback.Invoke(ref ctx);
+                var result = codec.DCallback.Invoke(ref ctx);
                 if (result == null) continue;
                 buffer = ctx.Buffer;
                 return result;
