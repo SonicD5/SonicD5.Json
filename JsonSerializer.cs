@@ -73,7 +73,7 @@ public static partial class JsonSerializer {
     }
     public static object? Deserialize(string json, Type type) => Deserialize(json, type, new());
     public static T? Deserialize<T>(string json, JsonDeserialization.Config config) => (T?)Deserialize(json, typeof(T), config);
-    public static T? Deserialize<T>(string json) => Deserialize<T>(json, new());
+	public static T? Deserialize<T>(string json) => Deserialize<T>(json, new());
 
     public static bool TryDeserialize(string json, Type type, JsonDeserialization.Config config, out object? result) {
         try {
