@@ -18,6 +18,7 @@ public sealed class JsonSerializationIgnoreAttribute : Attribute { }
 
 public enum NamingConvetions { Any, CamelCase, SnakeCase, PascalCase, KebabCase }
 public enum ObjectFieldConventions { NoQuote, SingleQuote = '\'', DoubleQuote = '\"' }
+public enum IntegralFormats { Decimal, LowerCaseHex = 'x', UpperCaseHex = 'X'}
 
 [Flags]
 public enum JsonTypes {
@@ -69,13 +70,22 @@ public sealed partial class JsonCodec {
 }
 public static class JsonSerialization {
     public sealed class Config : JsonCodec.Config {
-
         public NamingConvetions NamingConvetion { get; init; } = NamingConvetions.Any;
-        public ObjectFieldConventions ObjectFieldConvention { get; init; } = ObjectFieldConventions.DoubleQuote;
-		
+		/// <summary>
+		/// Can be changed only in JSON5 without consequences
+		/// </summary>
+		public ObjectFieldConventions ObjectFieldConvention { get; init; } = ObjectFieldConventions.DoubleQuote;
+		/// <summary>
+		/// Can be changed only in JSON5 without consequences
+		/// </summary>
+		public IntegralFormats IntegralFormat { get; init; } = IntegralFormats.Decimal;
+		/// <summary>
+		/// Can be changed only in JSON5 without consequences
+		/// </summary>
+
 		public int MinNestLevel { get; init; } = 2;
 		public string Indent {
-			get => field;
+			get;
 			init {
 				for (int i = 0; i < value.Length; i++)
 					if (!char.IsWhiteSpace(value[i]))
@@ -121,7 +131,7 @@ public static class JsonDeserialization {
 		public required JsonReadBuffer Buffer { get; set; }
 		public required LinkedType Type { get; init; }
 		public required Config Config { get; init; }
-		public Invoker Invoker { readonly get => field; set { field ??= value; } }
+		public Invoker Invoker { readonly get; set => field ??= value; }
 		public required Type FoundType {
 			readonly get {
 				if (field == null) throw new NullReferenceException("The found type must be deleted or be found");

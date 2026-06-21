@@ -1,6 +1,5 @@
 ﻿using System.Collections;
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using static SonicD5.Json.JsonSerializer;
 
 namespace SonicD5.Json;
@@ -23,7 +22,29 @@ public static class JsonSystemCodecs {
         }
     };
 
-	public static readonly Func<string?, JsonCodec> DateTimeCodec = format => new() {
+    public static readonly JsonCodec FlagsEnumCodec = new() {
+        TPredicate = (ref ctx) => ctx.Type.IsEnum,
+        JsonTypes = JsonTypes.Number,
+        SCallback = (ref ctx) => {
+            var type = ctx.Type.Value;
+            if (!type.IsDefined(typeof(FlagsAttribute), false)) {
+                ctx.HasSkiped = true;
+                return;
+            }
+            var underlyingType = type.GetEnumUnderlyingType();
+            ctx.Invoker(Convert.ChangeType(ctx.Object, underlyingType), new(underlyingType, ctx.Type), ctx.IndentCount);
+        },
+        DCallback = (ref ctx) => {
+			var type = ctx.Type.Value;
+            if (!type.IsDefined(typeof(FlagsAttribute), false)) return null;
+            var buffer = ctx.Buffer.Copy();
+            var result = Enum.ToObject(type, ctx.Invoker(ref buffer, new(type.GetEnumUnderlyingType(), ctx.Type))!);
+            ctx.Buffer = buffer;
+            return result;
+		}
+    };
+
+    public static readonly Func<string?, JsonCodec> DateTimeCodec = format => new() {
 		TPredicate = (ref ctx) => ctx.Type == typeof(DateTime),
 		JsonTypes = JsonTypes.Number | JsonTypes.String,
 		SCallback = (ref ctx) => { 
@@ -38,7 +59,7 @@ public static class JsonSystemCodecs {
                 return DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
             }
 
-            tempBuf = ctx.Buffer;
+            tempBuf = ctx.Buffer.Copy();
             if (tempBuf.TryReadString(out string iso) && DateTime.TryParse(iso, CultureInfo.InvariantCulture, out var result)) {
                 ctx.Buffer = tempBuf;
                 return result;

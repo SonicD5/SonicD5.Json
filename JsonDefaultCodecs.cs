@@ -1,9 +1,11 @@
 ﻿using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Reflection;
-using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace SonicD5.Json;
@@ -25,14 +27,16 @@ public sealed partial class JsonCodec {
         new() {
             TPredicate = (ref ctx) => ctx.Type.IsPrimitive || ctx.Type == typeof(decimal),
             JsonTypes = JsonTypes.Number | JsonTypes.Boolean,
-            SCallback = (ref ctx) => 
-            ctx.Result.Append(ctx.Object switch {
-                float f => f.ToString(CultureInfo.InvariantCulture),
-                double d => d.ToString(CultureInfo.InvariantCulture),
-                decimal d => d.ToString(CultureInfo.InvariantCulture),
-                bool b => b ? "true" : "false",
-                _ => ctx.Object.ToString()
-            }),
+            SCallback = (ref ctx) => {
+                var obj = ctx.Object;
+                 ctx.Result.Append(obj switch {
+                    float f => f.ToString(CultureInfo.InvariantCulture),
+                    double d => d.ToString(CultureInfo.InvariantCulture),
+                    decimal d => d.ToString(CultureInfo.InvariantCulture),
+                    bool b => b ? "true" : "false",
+                    _ => SerializeIntegral(obj, ctx.Config.IntegralFormat, ctx.Type.Value)
+                });
+			},
             DCallback = (ref ctx) => {
                 var type = ctx.Type.Value;
                 string raw = ctx.Buffer.ReadPrimitive();
@@ -46,13 +50,14 @@ public sealed partial class JsonCodec {
                     TypeCode.Decimal => decimal.Parse(raw, CultureInfo.InvariantCulture),
 
                     TypeCode.Byte => isHex ? Convert.ToByte(raw, 16) : byte.Parse(raw),
+                    TypeCode.UInt16 => isHex ? Convert.ToUInt16(raw, 16) : ushort.Parse(raw),
                     TypeCode.Int16 => isHex ? HexApplier(Convert.ToInt16(raw, 16), isNegative) : short.Parse(raw),
+                    TypeCode.UInt32 => isHex ? Convert.ToUInt32(raw, 16) : uint.Parse(raw),
                     TypeCode.Int32 => isHex ? HexApplier(Convert.ToInt32(raw, 16), isNegative) : int.Parse(raw),
+                    TypeCode.UInt64 => isHex ? Convert.ToUInt64(raw, 16) : ulong.Parse(raw),
                     TypeCode.Int64 => isHex ? HexApplier(Convert.ToInt64(raw, 16), isNegative) : long.Parse(raw),
                     TypeCode.SByte => isHex ? HexApplier(Convert.ToSByte(raw, 16), isNegative) : sbyte.Parse(raw),
-                    TypeCode.UInt16 => isHex ? Convert.ToUInt16(raw, 16) : ushort.Parse(raw),
-                    TypeCode.UInt32 => isHex ? Convert.ToUInt32(raw, 16) : uint.Parse(raw),
-                    TypeCode.UInt64 => isHex ? Convert.ToUInt64(raw, 16) : ulong.Parse(raw),
+
                     _ => default!
                 };
             }
@@ -104,7 +109,7 @@ public sealed partial class JsonCodec {
             }
         },
         new() {
-            TPredicate = (ref ctx) => 
+            TPredicate = (ref ctx) =>
             ctx.Type.IsGenericType && ctx.Type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>),
             JsonTypes = JsonTypes.Object,
             SCallback = (ref ctx) => SerializeObject(ref ctx, ctx.Type.Value.GetFieldsAndProperties(m => m.MemberType == MemberTypes.Field, BindingFlags.NonPublic)),
@@ -118,7 +123,32 @@ public sealed partial class JsonCodec {
         },
     ];
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static string SerializeIntegral([NotNull] object obj, IntegralFormats intF, Type type) {
+		if (intF == IntegralFormats.Decimal) return obj.ToString()!;
+
+		string format = $"{intF:d}{Marshal.SizeOf(type)}";
+        string hexPrefix = "0x";
+
+		if (obj is byte or ushort or uint or ulong) return hexPrefix + ((ulong)obj).ToString(format);
+
+		long value = (long)obj;
+        string uHex = $"{hexPrefix}{Math.Abs(value).ToString(format)}";
+		StringBuilder sb = new(uHex.Length);
+        if (value < 0) sb.Append('-');
+        sb.Append(uHex);
+        return sb.ToString();
+	}
+
     public static bool DefaultMemberFilter(MemberInfo m) => m.MemberType == MemberTypes.Field || (m is PropertyInfo p && p.CanWrite && p.CanRead);
+    public static object DeserializeConstructorObject(ref JsonDeserialization.CallbackContext ctx, BindingFlags bindingAttr, Type argType) {
+        var type = ctx.Type.Value;
+		var buffer = ctx.Buffer.Copy();
+        var result = (type.GetConstructor(bindingAttr, [argType]) ?? throw new JsonReflectionException($"This object hasn't constructor with \"{JsonSerializer.StringType(argType)}\" argument type")).Invoke([ctx.Invoker(ref buffer, new(argType, ctx.Type))]);
+        ctx.Buffer = buffer;
+		return result;
+	}
+
     public static void SerializeObject(ref JsonSerialization.CallbackContext ctx, MemberInfo[] members) {
         if (members.Length == 0) {
             ctx.Result.Append("{}");
