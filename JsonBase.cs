@@ -78,7 +78,7 @@ public static class JsonSerialization {
 		/// <summary>
 		/// Can be changed only in JSON5 without consequences
 		/// </summary>
-		public IntegralFormats IntegralFormat { get; set; } = IntegralFormats.Decimal;
+		public IntegralFormats IntegralFormat { get; init; } = IntegralFormats.Decimal;
 		/// <summary>
 		/// Can be changed only in JSON5 without consequences
 		/// </summary>

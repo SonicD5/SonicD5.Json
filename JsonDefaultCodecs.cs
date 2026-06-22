@@ -70,8 +70,8 @@ public sealed partial class JsonCodec {
                 var obj = ctx.Object;
                 var field = type.GetFields().First(f => f.Name == Enum.GetName(type, obj));
 
-                ctx.Result.Append($"\"{(field.IsDefined(typeof(JsonSerializableAttribute)) ? field.GetCustomAttribute<JsonSerializableAttribute>()!.Name :
-				field.Name.ConvertCase(ctx.Config.NamingConvetion))}\"");
+                ctx.Result.Append(field.IsDefined(typeof(JsonSerializableAttribute)) ? field.GetCustomAttribute<JsonSerializableAttribute>()!.Name :
+                field.Name.ConvertCase(ctx.Config.NamingConvetion));
             },
             DCallback = (ref ctx) => {
                 var type = ctx.Type.Value;
@@ -127,12 +127,12 @@ public sealed partial class JsonCodec {
 	private static string SerializeIntegral([NotNull] object obj, IntegralFormats intF, Type type) {
 		if (intF == IntegralFormats.Decimal) return obj.ToString()!;
 
-		string format = $"{(char)intF}{Marshal.SizeOf(type) * 2}";
+		string format = $"{intF:d}{Marshal.SizeOf(type)}";
         string hexPrefix = "0x";
 
-		if (obj is byte or ushort or uint or ulong) return hexPrefix + ((IFormattable)obj).ToString(format, null);
+		if (obj is byte or ushort or uint or ulong) return hexPrefix + ((ulong)obj).ToString(format);
 
-		long value = Convert.ToInt64(obj);
+		long value = (long)obj;
         string uHex = $"{hexPrefix}{Math.Abs(value).ToString(format)}";
 		StringBuilder sb = new(uHex.Length);
         if (value < 0) sb.Append('-');
@@ -144,7 +144,7 @@ public sealed partial class JsonCodec {
     public static object DeserializeConstructorObject(ref JsonDeserialization.CallbackContext ctx, BindingFlags bindingAttr, Type argType) {
         var type = ctx.Type.Value;
 		var buffer = ctx.Buffer.Copy();
-        var result = (type.GetConstructor(bindingAttr | BindingFlags.Instance, [argType]) ?? throw new JsonReflectionException($"This object hasn't constructor with \"{JsonSerializer.StringType(argType)}\" argument type")).Invoke([ctx.Invoker(ref buffer, new(argType, ctx.Type))]);
+        var result = (type.GetConstructor(bindingAttr, [argType]) ?? throw new JsonReflectionException($"This object hasn't constructor with \"{JsonSerializer.StringType(argType)}\" argument type")).Invoke([ctx.Invoker(ref buffer, new(argType, ctx.Type))]);
         ctx.Buffer = buffer;
 		return result;
 	}
@@ -164,14 +164,13 @@ public sealed partial class JsonCodec {
 			Type? type = null;
 			if (m is FieldInfo f) type = f.FieldType;
 			else if (m is PropertyInfo p) type = p.PropertyType;
-			if (type!.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array | JsonTypes.Object)) {
+			if (type!.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 				newIndentCount = ctx.IndentCount + 1;
                 break;
 			}
 		};
         bool notNested = newIndentCount != 0;
-        var objFieldConvention = ctx.Config.ObjectFieldConvention;
-		string quoute = objFieldConvention == ObjectFieldConventions.NoQuote ? "" : ((char)objFieldConvention).ToString();
+		string quoute = ctx.Config.ObjectFieldConvention == ObjectFieldConventions.NoQuote ? "" : ((char)ctx.Config.ObjectFieldConvention).ToString();
 
 		if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested) 
             ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
@@ -224,7 +223,7 @@ public sealed partial class JsonCodec {
 		int newIndentCount = 0;
 		if (ctx.IndentCount < ctx.Config.MinNestLevel) newIndentCount = ctx.IndentCount + 1;
 		else if (hasIndent) foreach (var v in array) {
-			if (v != null && v.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array | JsonTypes.Object)) {
+			if (v != null && v.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 				newIndentCount = ctx.IndentCount + 1;
 				break;
 			}
@@ -266,7 +265,7 @@ public sealed partial class JsonCodec {
 		int newIndentCount = 0;
 		if (ctx.IndentCount < ctx.Config.MinNestLevel) newIndentCount = ctx.IndentCount + 1;
 		else if (hasIndent) foreach (var i in collection) {
-			if (i != null && i.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array | JsonTypes.Object)) {
+			if (i != null && i.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
 				newIndentCount = ctx.IndentCount + 1;
 				break;
 			}
