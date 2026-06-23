@@ -22,21 +22,20 @@ public static class JsonSystemCodecs {
         }
     };
 
-    public static readonly JsonCodec FlagsEnumCodec = new() {
-        TPredicate = (ref ctx) => ctx.Type.IsEnum,
+    public static readonly Func<IntegralFormats, JsonCodec> FlagsEnumCodec = intF => new() {
+        TPredicate = (ref ctx) => ctx.Type.IsEnum && ctx.Type.IsDefined(typeof(FlagsAttribute), false),
         JsonTypes = JsonTypes.Number,
         SCallback = (ref ctx) => {
             var type = ctx.Type.Value;
-            if (!type.IsDefined(typeof(FlagsAttribute), false)) {
-                ctx.HasSkiped = true;
-                return;
-            }
             var underlyingType = type.GetEnumUnderlyingType();
+            var config = ctx.Config;
+            var configIntF = config.IntegralFormat;
+			config.IntegralFormat = intF;
             ctx.Invoker(Convert.ChangeType(ctx.Object, underlyingType), new(underlyingType, ctx.Type), ctx.IndentCount);
+            config.IntegralFormat = configIntF;
         },
         DCallback = (ref ctx) => {
 			var type = ctx.Type.Value;
-            if (!type.IsDefined(typeof(FlagsAttribute), false)) return null;
             var buffer = ctx.Buffer.Copy();
             var result = Enum.ToObject(type, ctx.Invoker(ref buffer, new(type.GetEnumUnderlyingType(), ctx.Type))!);
             ctx.Buffer = buffer;
@@ -100,19 +99,21 @@ public static class JsonSystemCodecs {
 			int newIndentCount = 0;
 			if (ctx.IndentCount < ctx.Config.MinNestLevel) newIndentCount = ctx.IndentCount + 1;
 			else if (hasIndent) foreach (var v in dict.Values) {
-				if (v != null && v.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array, JsonTypes.Object)) {
+				if (v != null && v.GetType().HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Array | JsonTypes.Object)) {
 					newIndentCount = ctx.IndentCount + 1;
 					break;
 				}
 			};
 			bool notNested = newIndentCount != 0;
 
-			if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested)
-				ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
+			if (!ctx.Type.Value.HasJsonTypes(ctx.Config.CodecPack, JsonTypes.Object) && notNested) ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount - 1));
 			ctx.Result.Append('{');
+			var objFieldConvention = ctx.Config.ObjectFieldConvention;
+			string newQuoute = objFieldConvention == ObjectFieldConventions.NoQuote ? "" : ((char)objFieldConvention).ToString();
 			foreach (var key in dict.Keys) {
-                var value = dict[key];
-                if (ctx.Config.IgnoreNullValues && value == null) continue;
+				var value = dict[key];
+				if (ctx.Config.IgnoreNullValues && value == null) continue;
+
 				if (isNotFirst) {
 					ctx.Result.Append(',');
 					if (notNested) ctx.Result.AppendLine();
@@ -122,11 +123,17 @@ public static class JsonSystemCodecs {
 					isNotFirst = true;
 				}
 				ctx.Result.Append(ctx.Config.Indent.Repeat(newIndentCount));
-                ctx.Invoker.Invoke(key, new(key == null ? typeof(object) : key.GetType(), ctx.Type), newIndentCount);
-                ctx.Result.Append(':');
+				int keyStartIndex = ctx.Result.Length;
+
+				ctx.Invoker.Invoke(key, new(key == null ? typeof(object) : key.GetType(), ctx.Type), newIndentCount);
+
+				int keyAddedLength = ctx.Result.Length - keyStartIndex;
+				if (keyAddedLength > 2) ctx.Result.Replace("\"", newQuoute, keyStartIndex, keyAddedLength);
+                else throw new JsonSyntaxException($"Unterminated or empty string");
+				ctx.Result.Append(':');
 				if (hasIndent) ctx.Result.Append(' ');
 				ctx.Invoker.Invoke(value, new(value == null ? typeof(object) : value.GetType(), ctx.Type), newIndentCount);
-            }
+			}
 			if (notNested) {
 				ctx.Result.AppendLine();
 				ctx.Result.Append(ctx.Config.Indent.Repeat(ctx.IndentCount));
@@ -146,12 +153,13 @@ public static class JsonSystemCodecs {
             var dict = (IDictionary)Activator.CreateInstance(type)!;
             LinkedType linkedVType = new(ctx.FoundType.GetGenericArguments()[1], ctx.Type);
 
-            while (true) {
+			while (true) {
                 if (next == JsonReadBuffer.NextType.Undefined) {
                     var buffer = ctx.Buffer.Copy();
                     string key = buffer.ReadObjectFieldName();
                     // prevents to add schema
                     if (key == "$schema") continue;
+
                     JsonReadBuffer keyBuffer = new($"\"{key}\"");
                     dict.Add(ctx.Invoker.Invoke(ref keyBuffer, new(kType, ctx.Type))!, ctx.Invoker.Invoke(ref buffer, linkedVType));
                     ctx.Buffer = buffer;

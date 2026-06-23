@@ -39,7 +39,7 @@ public static partial class JsonSerializer {
 #pragma warning restore CS8601
 				};
                 ctx.Invoker = (o, lt, ic) => {
-                    StringBuilder result = ctx.Result;
+                    var result = ctx.Result;
                     Serialize(ref result, o, lt, config, ic);
                     ctx.Result = result;
                 };
