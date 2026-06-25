@@ -64,8 +64,7 @@ public sealed partial class JsonCodec {
     }
 
 	public abstract class Config {
-        private readonly ImmutableList<JsonCodec> _customCodecPack = [];
-        public ImmutableList<JsonCodec> CodecPack { get => _customCodecPack.AddRange(DefaultCodecPack); init => _customCodecPack = value; }
+		public ImmutableList<JsonCodec> CodecPack { get => field.AddRange(DefaultCodecPack); init; } = [];
     }
 }
 public static class JsonSerialization {

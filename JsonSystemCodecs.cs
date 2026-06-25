@@ -72,7 +72,7 @@ public static class JsonSystemCodecs {
         TPredicate = (ref ctx) => ctx.Type.IsAssignableTo(typeof(Type)),
         JsonTypes = JsonTypes.String,
         SCallback = (ref ctx) => ctx.Result.Append($"\"{StringType((Type)ctx.Object)}\""),
-        DCallback = (ref ctx) => throw new NotImplementedException()
+        DCallback = (ref ctx) => Type.GetType("")
     };
 
 
