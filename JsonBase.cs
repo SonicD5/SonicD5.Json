@@ -78,9 +78,6 @@ public static class JsonSerialization {
 		/// Can be changed only in JSON5 without consequences
 		/// </summary>
 		public IntegralFormats IntegralFormat { get; set; } = IntegralFormats.Decimal;
-		/// <summary>
-		/// Can be changed only in JSON5 without consequences
-		/// </summary>
 
 		public int MinNestLevel { get; init; } = 2;
 		public string Indent {
